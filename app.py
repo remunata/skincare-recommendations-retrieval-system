@@ -5,7 +5,10 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import confusion_matrix
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Persiapan data
 nltk.download('punkt')
@@ -88,10 +91,6 @@ if st.session_state.page == "Input Search Keywords":
                 st.session_state.selected_product = product_data['product_name']
                 go_to_page("Product View")
 
-        # st.subheader("Hasil Pencarian:")
-        # for product_name, relevance in search_results:
-        #     st.write(f"{product_name} (Relevansi: {relevance:.4f})")
-
         # Evaluasi berdasarkan keseluruhan dataset
         threshold_recommend = 0.150
         threshold_ground_truth = 0.180
@@ -99,6 +98,20 @@ if st.session_state.page == "Input Search Keywords":
         # Menentukan relevansi berdasarkan threshold
         recommended_relevance = cosine_similarities[0][sorted_indices] >= threshold_recommend
         ground_truth_relevance = cosine_similarities[0][sorted_indices] >= threshold_ground_truth
+
+        # Confusion matrix
+        cm = confusion_matrix(ground_truth_relevance, recommended_relevance,
+                              labels=[True, False])
+        df_cm = pd.DataFrame(cm, range(2), range(2))
+
+        fig = plt.figure(figsize=(10, 4))
+        sns.set_theme(font_scale=1.4)
+        sns.heatmap(df_cm, annot=True, cmap='RdPu', fmt='g', cbar=False, annot_kws={"size": 16},
+                    xticklabels=["True", "False"], yticklabels=["True", "False"])
+        plt.xlabel("Prediction", fontsize=16, labelpad=20, fontweight="bold")
+        plt.ylabel("Actual", rotation=0, fontsize=16, labelpad=50, fontweight="bold")
+        plt.yticks(rotation=0)
+        plt.title("Confusion Matrix", fontsize=20, pad=25, fontweight="bold", x=0.4)
 
         # Menghitung TP, FP, FN
         tp = np.sum(np.logical_and(recommended_relevance, ground_truth_relevance))
@@ -112,31 +125,32 @@ if st.session_state.page == "Input Search Keywords":
         
         # Menampilkan metrik evaluasi untuk keseluruhan dataset
         st.subheader("Evaluasi berdasarkan Keseluruhan Dataset:")
-        st.write(f"**Recommended Relevance (>= threshold):** {recommended_relevance}")
-        st.write(f"**Ground Truth Relevance (>= threshold):** {ground_truth_relevance}")
+        st.pyplot(fig)
+        st.write(st.get_option('theme.backgroundColor'))
         st.write(f"**Precision:** {precision:.4f}")
         st.write(f"**Recall:** {recall:.4f}")
         st.write(f"**F1-Score:** {f1:.4f}")
         
         # Evaluasi berdasarkan 5 teratas
-        threshold_recommend_top = 0.155
-        threshold_ground_truth_top = 0.180
-        
-        # Menentukan relevansi berdasarkan threshold untuk 5 teratas
-        recommended_relevance_top = cosine_similarities[0] >= threshold_recommend_top
-        ground_truth_relevance_top = cosine_similarities[0] >= threshold_ground_truth_top
+        recommended_relevance_top = recommended_relevance[:5]
+        ground_truth_relevance_top = ground_truth_relevance[:5]
 
-        # Mengambil indeks produk yang relevan
-        relevant_indices = np.where(recommended_relevance_top)[0]
-        sorted_indices_top = np.argsort(-cosine_similarities[0][relevant_indices])[:5]  # Ambil 5 teratas
+        # Confusion matrix 5 teratas
+        cm_top = confusion_matrix(ground_truth_relevance_top, recommended_relevance_top,
+                                  labels=[True, False])
+        df_cm_top = pd.DataFrame(cm_top, range(2), range(2))
 
-        # Hitung TP, FP, dan FN berdasarkan produk teratas yang relevan
-        recommended_relevance_top_values = recommended_relevance_top[relevant_indices][sorted_indices_top]
-        ground_truth_relevance_top_values = ground_truth_relevance_top[relevant_indices][sorted_indices_top]
+        fig_top = plt.figure(figsize=(10, 4))
+        sns.heatmap(df_cm_top, annot=True, cmap='RdPu', fmt='g', cbar=False, annot_kws={"size": 16},
+                    xticklabels=["True", "False"], yticklabels=["True", "False"])
+        plt.xlabel("Prediction", fontsize=16, labelpad=20, fontweight="bold")
+        plt.ylabel("Actual", rotation=0, fontsize=16, labelpad=50, fontweight="bold")
+        plt.yticks(rotation=0)
+        plt.title("Confusion Matrix", fontsize=20, pad=25, fontweight="bold", x=0.4)
 
-        tp_top = np.sum(np.logical_and(recommended_relevance_top_values, ground_truth_relevance_top_values))  # True Positives
-        fp_top = np.sum(np.logical_and(recommended_relevance_top_values, ~ground_truth_relevance_top_values))  # False Positives
-        fn_top = np.sum(np.logical_and(~recommended_relevance_top_values, ground_truth_relevance_top_values))  # False Negatives
+        tp_top = np.sum(np.logical_and(recommended_relevance_top, ground_truth_relevance_top))  # True Positives
+        fp_top = np.sum(np.logical_and(recommended_relevance_top, ~ground_truth_relevance_top))  # False Positives
+        fn_top = np.sum(np.logical_and(~recommended_relevance_top, ground_truth_relevance_top))  # False Negatives
 
         # Menghitung Precision, Recall, dan F1-Score untuk 5 teratas
         precision_top = tp_top / (tp_top + fp_top) if (tp_top + fp_top) > 0 else 0
@@ -145,8 +159,7 @@ if st.session_state.page == "Input Search Keywords":
         
         # Menampilkan metrik evaluasi untuk 5 teratas
         st.subheader("Evaluasi berdasarkan 5 Teratas:")
-        st.write(f"**Recommended Relevance (>= threshold):** {recommended_relevance_top_values}")
-        st.write(f"**Ground Truth Relevance (>= threshold):** {ground_truth_relevance_top_values}")
+        st.pyplot(fig_top)
         st.write(f"**Precision:** {precision_top:.4f}")
         st.write(f"**Recall:** {recall_top:.4f}")
         st.write(f"**F1-Score:** {f1_top:.4f}")
